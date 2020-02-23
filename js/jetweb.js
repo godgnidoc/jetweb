@@ -19,10 +19,6 @@ exports.log = log;
 class WebServerOptions {
 }
 exports.WebServerOptions = WebServerOptions;
-exports.injection = {
-    request: http.IncomingMessage,
-    response: http.ServerResponse
-};
 class Web {
     constructor(controllers, options = {}) {
         this.controllers = {};

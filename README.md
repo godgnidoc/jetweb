@@ -27,12 +27,6 @@
 npm install jetweb
 ~~~
 
-您可以安装`@types/jetweb`来提供代码提示
-
-~~~bash
-npm install @types/jetweb
-~~~
-
 ## 1.1. HelloWorld
 
 以下`typescript`源码展示了如何轻松建立一个web服务器
@@ -101,21 +95,7 @@ Access-Control-Allow-Headers: x-requested-with,content-type
 
 请注意:<u>接口函数每次运行前，都会被绑定在由请求对象和响应对象构成临时上下文上，因此`this`引用不能用于访问`控制器`对象。</u>
 
-您可以将注入物`injection`注入控制器对象，即可在`IDE`中得到正确的代码提示。但是您的`this`仍然指向一个全新的对象。
-
-~~~typescript
-import {injection} from 'jetweb'
-let controllers = {
-    user {
-        ... injection,
-        postLogin( phone : string, password : string ) {
-            ...
-        }
-    }
-}
-~~~
-
-如此，在接口函数中，使用`this.request`即可访问请求对象，使用`this.response`即可访问响应对象。
+在接口函数中，使用`this.request`即可访问请求对象，使用`this.response`即可访问响应对象。
 
 `jetweb`为您在`this.request`对象中注入了若干变量，以便您迅速找到您想要的东西：
 

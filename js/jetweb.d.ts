@@ -43,57 +43,6 @@ declare module "jetweb" {
     }
 
     /**
-     * @class ClientRequest : 客户端请求
-     * @desc
-     *  此结构扩展了http输入信息结构
-     */
-    class ClientRequest extends IncomingMessage {
-
-        /**
-         * @property params : 所有请求参数
-         * @desc
-         *  包括查询请求内的所有参数
-         *  若请求体被解析为json对象，其中的属性也会被填写进来
-         *  若重名，json请求体的属性会覆盖查询请求
-         */
-        params: object
-
-        /**
-         * @property body : 请求体原文
-         * @desc
-         *  请求体字符串形式的原文内容
-         */
-        body: string
-
-        /**
-         * @property json : 请求体json
-         * @desc
-         *  若请求体被解析为json，无论数据类型如何，此属性用于保存解析成功的json变量
-         */
-        json?: any
-    }
-
-    /**
-     * @var injection : 注入体
-     * @description: 将此对象注入控制器，即可获得正确的代码提示
-     */
-    let injection : {
-        /**
-         * @property request : 请求对象
-         * @desc
-         *  包含与请求相关的信息
-         */
-        request : ClientRequest
-
-        /**
-         * @property response : 响应对象
-         * @desc
-         *  用于手动控制响应动作
-         */
-        response : ServerResponse
-    }
-
-    /**
      * @class Web : 服务器类
      * @desc：
      *  将此类实例化以运行服务器

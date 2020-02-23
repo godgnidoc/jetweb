@@ -12,11 +12,6 @@ export class WebServerOptions {
     static? : boolean
 }
 
-export let injection = {
-    request : http.IncomingMessage,
-    response : http.ServerResponse
-}
-
 export class Web {
     controllers : object = {}
     port : number
