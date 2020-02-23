@@ -1,12 +1,14 @@
 {
   "name": "jetweb",
-  "version": "1.0.1",
+  "version": "3.0.0",
   "description": "a very simple web framework for ts.",
-  "main": "js/web.js",
+  "main": "js/jetweb.js",
+  "readme": "README.md",
   "scripts": {
     "watch": "tsc -b -w &",
     "build": "tsc -b"
   },
+  "types": "js/jetweb.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dn-ezr/jetweb.git"
