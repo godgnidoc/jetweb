@@ -180,10 +180,11 @@ class Proc {
             let ret = await entry.apply(this, args)
             if( ret != undefined ) {
                 this.response.setHeader('ContentType', 'application/json')
-                ret = JSON.stringify(ret)
-                this.response.write(ret)
-                if( ret.length > 1024 ) ret = ret.slice(0,1024) + ' ...'
-                log(`\x1b[1;36m[RETURN ${this.request.url}]\x1b[0m `, ret)
+                let rets = JSON.stringify(ret)
+                this.response.write(rets)
+                if( rets.length > 1024 ) rets = rets.slice(0,1024) + ' ...'
+                else rets = ret
+                log(`\x1b[1;36m[RETURN ${this.request.url}]\x1b[0m `, rets)
             }
             log(`\x1b[1;32m[${this.response.statusCode} ${this.request.url}]\x1b[0m`)
         } catch( e ) {

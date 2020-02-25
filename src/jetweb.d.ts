@@ -64,7 +64,7 @@ declare module "jetweb" {
          * @param controllers 控制器集合
          * @param options 服务器选项
          */
-        constructor( controllers : object, options : ServerOptions )
+        constructor( controllers : object, options? : ServerOptions )
 
         /**
          * @method run 运行服务器
