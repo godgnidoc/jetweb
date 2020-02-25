@@ -1,8 +1,8 @@
 {
   "name": "jetweb",
-  "version": "3.0.2",
+  "version": "3.1.5",
   "description": "a very simple web framework for ts.",
-  "main": "js/jetweb.js",
+  "main": "src/jetweb.js",
   "readme": "README.md",
   "scripts": {
     "watch": "tsc -b -w &",

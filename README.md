@@ -16,6 +16,7 @@
   - [2.0. 端口号](#20-%e7%ab%af%e5%8f%a3%e5%8f%b7)
   - [2.1. 跨域](#21-%e8%b7%a8%e5%9f%9f)
   - [2.2. 静态映射](#22-%e9%9d%99%e6%80%81%e6%98%a0%e5%b0%84)
+  - [2.3. 安全套接字](#23-%e5%ae%89%e5%85%a8%e5%a5%97%e6%8e%a5%e5%ad%97)
 
 # 1. 快速入门
 
@@ -125,7 +126,7 @@ new Web(controllers,{port:80})
 
 默认情况下，如果您没有编写接口来处理这个`header`请求，此请求将以`404`失败告终。
 
-您可以指定`cors`选项为`true`，这样`jetweb`服务器会为您自动允许所有的跨域资源共享询问。
+您可以指定`cors`选项为`true`，这样`jetweb`服务器会为您自动允许所有的跨域资源共享询问。同时`jetweb`也会为所有的响应添加适用于任何网站的跨域许可头。
 
 ~~~typescript
 new Web(controllers,{cors:true})
@@ -159,4 +160,19 @@ new Web({
 
 ~~~typescript
 new Web(controllers, {static: true})
+~~~
+
+## 2.3. 安全套接字
+
+默认情况下，`jetweb`使用`http`服务器进行通信，如果您需要，可以传入`ssl`选项以开启`https`服务器。
+
+`ssl`选项的内容参考`https.ServerOptions`结构。
+
+~~~typescript
+new Web(controllers,{
+    ssl:{
+        key: fs.readFileSync('test/fixtures/keys/agent2-key.pem'),
+        cert: fs.readFileSync('test/fixtures/keys/agent2-cert.pem')
+    }
+})
 ~~~

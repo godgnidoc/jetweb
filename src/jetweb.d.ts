@@ -1,5 +1,6 @@
 declare module "jetweb" {
-    import {IncomingMessage, ServerResponse} from 'http'
+    import * as http from 'http'
+    import * as https from 'https'
 
     /**
      * @function 打印带时间戳的日志
@@ -8,11 +9,11 @@ declare module "jetweb" {
     function log( ... args : any[] ) : void
 
     /**
-     * @class WebServerOptions : Web服务器选项
+     * @interface ServerOptions : Web服务器选项
      * @desc
      *  此结构用于构造Web服务器时对服务器进行配置
      */
-    class WebServerOptions {
+    interface ServerOptions {
 
         /**
          * @property port : 端口号
@@ -40,6 +41,13 @@ declare module "jetweb" {
          *  默认`false`
          */
         static? : boolean
+
+        /**
+         * @property ssl : ssl配置项
+         * @desc
+         *  若设置了此选项，则Web服务器使用https服务器
+         */
+        ssl? : https.ServerOptions
     }
 
     /**
@@ -49,12 +57,14 @@ declare module "jetweb" {
      */
     class Web {
 
+        server : https.Server | http.Server
+
         /**
          * @constructor
          * @param controllers 控制器集合
          * @param options 服务器选项
          */
-        constructor( controllers : object, options : WebServerOptions )
+        constructor( controllers : object, options : ServerOptions )
 
         /**
          * @method run 运行服务器

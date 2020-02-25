@@ -1,3 +1,4 @@
+import * as https from 'https'
 import * as http from 'http'
 import {URL} from 'url'
 
@@ -5,43 +6,42 @@ export function log( ... args : any[] ) {
     let date = new Date()    
     console.log(`[${date.toLocaleString()}] => `, ... args)
 }
-
-export class WebServerOptions {
+export interface ServerOptions {
     port? : number
     cors? : Function | boolean
     static? : boolean
+    ssl?: https.ServerOptions
 }
 
 export class Web {
-    controllers : object = {}
-    port : number
-    server : http.Server
-    mapping : null | object = null
+    controllers : object
+    server : http.Server | https.Server
+    mapping : object
+    options : ServerOptions
 
-    constructor( controllers : object, options : WebServerOptions = {} ) {
-        this.init(controllers,options)
-        this.server = http.createServer(this.handler)
+    constructor( controllers : object, options : ServerOptions = {} ) {
+        this.options = options
+        this.init(controllers)
+        if( options.ssl )
+            this.server = https.createServer(options.ssl,this.handler)
+        else
+            this.server = http.createServer(this.handler)
     }
 
-    private init( ctrls : object, options : WebServerOptions ) {
+    private init( ctrls : object ) {
+        this.controllers = {}
         for( let name in ctrls ) this.controllers[name.toLowerCase()] = ctrls[name]
         this.controllers['/'] = {}
 
-        if( options.port ) this.port = options.port
-        else this.port = 5000
+        if( !this.options.port ) this.options.port = 5000
         
-        if( typeof options.cors == 'function' ) this.controllers['/']['cors'] = options.cors
-        else if( options.cors ) this.controllers['/']['cors'] = () => {
-            this['response'].setHeader('Access-Control-Allow-Origin','*')
-            this['response'].setHeader('Access-Control-Allow-Methods','GET,POST')
-            this['response'].setHeader('Access-Control-Allow-Headers','x-requested-with,content-type')
-            return undefined
-        }
+        if( typeof this.options.cors == 'function' ) this.controllers['/']['cors'] = this.options.cors
+        else if( this.options.cors ) this.controllers['/']['cors'] = ()=>{return}
         else this.controllers['/']['cors'] = null
 
         this.bindArgs()
 
-        if( options.static ) this.map()
+        if( this.options.static ) this.map()
     }
 
     private map() {
@@ -81,6 +81,11 @@ export class Web {
                 }
             } catch( e ) {
                 log(e)
+            }
+            if( this.options.cors === true ) {
+                res.setHeader('Access-Control-Allow-Origin','*')
+                res.setHeader('Access-Control-Allow-Methods','GET,POST')
+                res.setHeader('Access-Control-Allow-Headers','x-requested-with,content-type')
             }
             let proc = new Proc( req, res )
             proc.route( entry )
@@ -142,9 +147,9 @@ export class Web {
     }
 
     public run( port ?: number ) {
-        if( port ) this.port = port
-        log(`web server listening localhost:${this.port}`)
-        this.server.listen(this.port)
+        if( port ) this.options.port = port
+        log(`web server listening localhost:${this.options.port}`)
+        this.server.listen(this.options.port)
     }
 }
 
