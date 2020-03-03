@@ -5,12 +5,12 @@
         "sourceMap": false,
         "removeComments": true,
         "noImplicitAny": false,
-        "outDir": "js"
+        "outDir": "./",
     },
     "include": [
         "./src/*"
     ],
     "exclude": [
         "node_modules"
-    ]
+    ],
 }

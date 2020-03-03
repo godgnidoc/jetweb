@@ -1,14 +1,14 @@
 {
   "name": "jetweb",
-  "version": "3.1.8",
+  "version": "4.0.1",
   "description": "a very simple web framework for ts.",
-  "main": "js/jetweb.js",
+  "main": "jetweb.js",
   "readme": "README.md",
   "scripts": {
     "watch": "tsc -b -w &",
     "build": "tsc -b"
   },
-  "types": "src/jetweb.d.ts",
+  "types": "jetweb.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dn-ezr/jetweb.git"
@@ -20,9 +20,13 @@
   ],
   "author": "GodGnidoc",
   "license": "MIT",
+  "dependencies": {
+    "ws": "7.2.1"
+  },
   "devDependencies": {
     "@types/node": "^13.1.7",
-    "typescript": "^3.7.5"
+    "typescript": "^3.7.5",
+    "@types/ws": "7.2.2"
   },
   "bugs": {
     "url": "https://github.com/dn-ezr/jetweb/issues"
