@@ -255,16 +255,14 @@ export class Web {
 
     private handleWebSocket = (request : http.IncomingMessage, socket : net.Socket, head: Buffer ) => {
         if( !this.wsServer ) {
-            this.wsServer = new ws.Server({noServer:true})
-            this.wsServer.on('connection', ( 
-                    socket : WebSocket, 
-                    request: http.IncomingMessage, 
-                    entry: WebSocketHandler) => {
-                log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)
-                if( entry ) entry.call(socket, request)
-                socket.addListener('close', () => {
-                    log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)
-                } )
+            this.wsServer = new ws.Server({noServer:true,clientTracking:false,perMessageDeflate:true})
+            this.wsServer.on('connection', ( socket : WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
+                setImmediate(()=>{
+                    log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)
+                    socket.addListener('close', () => {log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)})
+                    if( entry ) entry.call(socket, request)
+                    else socket.close()
+                })
             })
         }
         let url = new URL('http://localhost'+request.url)
@@ -306,7 +304,7 @@ export class Web {
             let args = []
             for( let name of entry['args'] )
                 if( typeof request.json == 'object' && name in request.json ) args.push(request.json[name])
-                else if( url.searchParams.has(name) ) args.push( url.searchParams[name])
+                else if( url.searchParams.has(name) ) args.push( url.searchParams.get(name))
                 else args.push(undefined)
 
             let ret = undefined
@@ -323,7 +321,7 @@ export class Web {
                 res.setHeader('ContentType', 'application/json')
                 let rets = JSON.stringify(ret)
                 res.write(rets)
-                if( rets.length > 1024 ) ret = rets.slice(0,1024) + ' ...'
+                if( rets.length > 256 ) ret = rets.slice(0,256) + ' ...'
             }
             res.end()
 
@@ -331,12 +329,11 @@ export class Web {
             url.searchParams.forEach((v,k)=>{params[k] = v})
             if( typeof request.json == 'object' ) params = {...params, ...request.json}
             let params_str = JSON.stringify(params)
-            if( params_str.length > 1024 ) params_str = params_str.slice(0, 1024) + ' ...'
+            if( params_str.length > 256 ) params_str = params_str.slice(0, 256) + ' ...'
             else params_str = params
-            log(`${color}[COMPLET ${req.url} ${res.statusCode}]`,
-                `\n\t\x1b[1;36m[PARAMS]\x1b[0m`, params_str,
-                `\n\t\x1b[1;36m[RETURN]\x1b[0m `, ret
-                )
+            log(`${color}[COMPLET ${req.url}] ${res.statusCode}\x1b[0m`)
+            log(`\x1b[1;36m[PARAMS ${req.url}]\x1b[0m\n`, params_str)
+            log(`\x1b[1;36m[RETURN ${req.url}]\x1b[0m\n`, ret)
         })
         if( this.options.cors === true ) {
             res.setHeader('Access-Control-Allow-Origin','*')

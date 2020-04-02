@@ -32,13 +32,15 @@ class Web {
     constructor(app, options = {}) {
         this.handleWebSocket = (request, socket, head) => {
             if (!this.wsServer) {
-                this.wsServer = new ws.Server({ noServer: true });
+                this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true });
                 this.wsServer.on('connection', (socket, request, entry) => {
-                    log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`);
-                    if (entry)
-                        entry.call(socket, request);
-                    socket.addListener('close', () => {
-                        log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`);
+                    setImmediate(() => {
+                        log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`);
+                        socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`); });
+                        if (entry)
+                            entry.call(socket, request);
+                        else
+                            socket.close();
                     });
                 });
             }
@@ -83,7 +85,7 @@ class Web {
                     if (typeof request.json == 'object' && name in request.json)
                         args.push(request.json[name]);
                     else if (url.searchParams.has(name))
-                        args.push(url.searchParams[name]);
+                        args.push(url.searchParams.get(name));
                     else
                         args.push(undefined);
                 let ret = undefined;
@@ -104,8 +106,8 @@ class Web {
                     res.setHeader('ContentType', 'application/json');
                     let rets = JSON.stringify(ret);
                     res.write(rets);
-                    if (rets.length > 1024)
-                        ret = rets.slice(0, 1024) + ' ...';
+                    if (rets.length > 256)
+                        ret = rets.slice(0, 256) + ' ...';
                 }
                 res.end();
                 let params = {};
@@ -113,11 +115,13 @@ class Web {
                 if (typeof request.json == 'object')
                     params = Object.assign(Object.assign({}, params), request.json);
                 let params_str = JSON.stringify(params);
-                if (params_str.length > 1024)
-                    params_str = params_str.slice(0, 1024) + ' ...';
+                if (params_str.length > 256)
+                    params_str = params_str.slice(0, 256) + ' ...';
                 else
                     params_str = params;
-                log(`${color}[COMPLET ${req.url} ${res.statusCode}]`, `\n\t\x1b[1;36m[PARAMS]\x1b[0m`, params_str, `\n\t\x1b[1;36m[RETURN]\x1b[0m `, ret);
+                log(`${color}[COMPLET ${req.url}] ${res.statusCode}\x1b[0m`);
+                log(`\x1b[1;36m[PARAMS ${req.url}]\x1b[0m\n`, params_str);
+                log(`\x1b[1;36m[RETURN ${req.url}]\x1b[0m\n`, ret);
             }));
             if (this.options.cors === true) {
                 res.setHeader('Access-Control-Allow-Origin', '*');
