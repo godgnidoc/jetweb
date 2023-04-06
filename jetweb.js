@@ -9,6 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Web = exports.log = exports.RequestContext = exports.Request = void 0;
 const https = require("https");
 const http = require("http");
 const ws = require("ws");
@@ -35,8 +36,8 @@ class Web {
                 this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true });
                 this.wsServer.on('connection', (socket, request, entry) => {
                     setImmediate(() => {
-                        log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`);
-                        socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`); });
+                        log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`);
+                        socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`); });
                         if (entry)
                             entry.call(socket, request);
                         else

@@ -258,8 +258,8 @@ export class Web {
             this.wsServer = new ws.Server({noServer:true,clientTracking:false,perMessageDeflate:true})
             this.wsServer.on('connection', ( socket : WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
                 setImmediate(()=>{
-                    log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)
-                    socket.addListener('close', () => {log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.connection.remoteAddress}:${request.connection.remotePort}`)})
+                    log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`)
+                    socket.addListener('close', () => {log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`)})
                     if( entry ) entry.call(socket, request)
                     else socket.close()
                 })
