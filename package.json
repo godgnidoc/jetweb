@@ -1,6 +1,6 @@
 {
   "name": "jetweb",
-  "version": "5.0.0",
+  "version": "5.0.2",
   "description": "a very simple web framework for ts.",
   "main": "jetweb.js",
   "readme": "README.md",

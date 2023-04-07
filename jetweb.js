@@ -113,6 +113,8 @@ class Web {
             });
             req.on('data', data => {
                 request.body += data;
+                if (fired)
+                    return;
                 const ends = ['l', 'e', '"', ']', '}', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
                 const frag = `${data}`.trimEnd();
                 const end = frag[frag.length - 1];

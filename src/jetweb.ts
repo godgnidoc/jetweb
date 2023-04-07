@@ -281,7 +281,6 @@ export class Web {
 
         let request = new Request(req)
         let should_json = 'content-type' in req.headers && undefined != req.headers["content-type"].match(/.*application\/json.*/)
-        let fired = false
 
         const job = async () => {
             let handler: RequestContext = { response: res, request }
@@ -315,7 +314,7 @@ export class Web {
             if (params_str.length > 48) params_str = params_str.slice(0, 40) + ' ...'
             else params_str = params
 
-            if( res.statusCode >= 400 ) {
+            if (res.statusCode >= 400) {
                 this.error(`[INCOMPLET %s] %s`, req.url, res.statusCode)
                 this.log(`[PARAMS %s]: %s`, req.url, params_str)
                 this.log(`[RETURN %s]: %s`, req.url, ret)
@@ -326,35 +325,20 @@ export class Web {
             }
         }
 
-        req.on('data', data => {
-            request.body += data
-            const ends = ['l', 'e', '"', ']', '}', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-            const frag = `${data}`.trimEnd()
-            const end = frag[frag.length - 1]
-
-            if (should_json && ends.includes(end)) {
+        req.on('data', data => { request.body += data })
+        req.on('end', async () => {
+            if (should_json) {
                 try {
                     request.json = JSON.parse(request.body)
-                    request.body = ''
-                    fired = true
-                    job()
+                    request.body = undefined
                 } catch {
-                    /** nothing to be done */
-                }
-            }
-        })
-
-        req.on('end', async () => {
-            if (!fired) {
-                fired = true
-                if (should_json && request.json == undefined) {
                     res.statusCode = 400
                     res.write('Json parse failed')
                     res.end()
-                } else {
-                    job()
+                    return
                 }
             }
+            job()
         })
 
         if (this.options.cors === true) {
@@ -390,7 +374,7 @@ export class Web {
     private format(sev: string, fmt: string) {
         let _fmt = fmt
         if (this.options.logging.color) {
-            _fmt = _fmt.replace(/%[^%]/g, sub=>`\x1b[1;36m${sub}\x1b[0m`)
+            _fmt = _fmt.replace(/%[^%]/g, sub => `\x1b[1;36m${sub}\x1b[0m`)
         }
 
         if (this.options.logging?.color) {

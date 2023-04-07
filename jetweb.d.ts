@@ -148,5 +148,10 @@ declare module "jetweb" {
          * @param port 端口号，若设置此参数，可覆盖配置项
          */
         listen( port?: number ) : void
+
+        public info(fmt: string, ...args: any[]): void
+        public error(fmt: string, ...args: any[]): void
+        public warn(fmt: string, ...args: any[]): void
+        public log(fmt: string, ...args: any[]): void
     }
 }
