@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Web = exports.log = exports.RequestContext = exports.Request = void 0;
+exports.Web = exports.RequestContext = exports.Request = void 0;
 const https = require("https");
 const http = require("http");
 const ws = require("ws");
@@ -24,11 +24,6 @@ exports.Request = Request;
 class RequestContext {
 }
 exports.RequestContext = RequestContext;
-function log(...args) {
-    let date = new Date();
-    console.log(`[${date.toLocaleString()}] => `, ...args);
-}
-exports.log = log;
 class Web {
     constructor(app, options = {}) {
         this.handleWebSocket = (request, socket, head) => {
@@ -36,8 +31,8 @@ class Web {
                 this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true });
                 this.wsServer.on('connection', (socket, request, entry) => {
                     setImmediate(() => {
-                        log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`);
-                        socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`); });
+                        this.log('[CONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort);
+                        socket.addListener('close', () => { this.log('[DISCONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort); });
                         if (entry)
                             entry.call(socket, request);
                         else
@@ -59,30 +54,19 @@ class Web {
             let url = new url_1.URL('http://localhost' + req.url);
             let entry = this.getEntry(url.pathname, req.method);
             if (!entry || typeof entry != 'function') {
-                log(`\x1b[1;33m[404 ${req.url}]\x1b[0m`);
                 res.statusCode = 404;
+                this.error('[%s %s]', res.statusCode, req.url);
                 res.write(`Are U lost ?`);
                 res.end();
                 return;
             }
             let request = new Request(req);
-            req.on('data', data => { request.body += data; });
-            req.on('end', () => __awaiter(this, void 0, void 0, function* () {
-                if ('content-type' in req.headers && req.headers["content-type"].match(/.*application\/json.*/)) {
-                    try {
-                        request.json = JSON.parse(request.body);
-                        request.body = undefined;
-                    }
-                    catch (e) {
-                        res.statusCode = 400;
-                        res.write('Json parsing failed');
-                        res.end();
-                        return;
-                    }
-                }
+            let should_json = 'content-type' in req.headers && undefined != req.headers["content-type"].match(/.*application\/json.*/);
+            let fired = false;
+            const job = () => __awaiter(this, void 0, void 0, function* () {
                 let handler = { response: res, request };
                 let args = [];
-                for (let name of entry['args'])
+                for (let name of this.dictateArgs(entry))
                     if (typeof request.json == 'object' && name in request.json)
                         args.push(request.json[name]);
                     else if (url.searchParams.has(name))
@@ -95,20 +79,16 @@ class Web {
                     ret = yield entry.apply(handler, args);
                 }
                 catch (e) {
-                    log(e);
+                    this.log('%s', e);
                     if (res.statusCode < 400)
                         res.statusCode = 500;
-                }
-                finally {
-                    if (res.statusCode >= 400)
-                        color = '\x1b[1;31m';
                 }
                 if (ret != undefined) {
                     res.setHeader('ContentType', 'application/json');
                     let rets = JSON.stringify(ret);
                     res.write(rets);
-                    if (rets.length > 256)
-                        ret = rets.slice(0, 256) + ' ...';
+                    if (rets.length > 48)
+                        ret = rets.slice(0, 40) + ' ...';
                 }
                 res.end();
                 let params = {};
@@ -116,13 +96,49 @@ class Web {
                 if (typeof request.json == 'object')
                     params = Object.assign(Object.assign({}, params), request.json);
                 let params_str = JSON.stringify(params);
-                if (params_str.length > 256)
-                    params_str = params_str.slice(0, 256) + ' ...';
+                if (params_str.length > 48)
+                    params_str = params_str.slice(0, 40) + ' ...';
                 else
                     params_str = params;
-                log(`${color}[COMPLET ${req.url}] ${res.statusCode}\x1b[0m`);
-                log(`\x1b[1;36m[PARAMS ${req.url}]\x1b[0m\n`, params_str);
-                log(`\x1b[1;36m[RETURN ${req.url}]\x1b[0m\n`, ret);
+                if (res.statusCode >= 400) {
+                    this.error(`[INCOMPLET %s] %s`, req.url, res.statusCode);
+                    this.log(`[PARAMS %s]: %s`, req.url, params_str);
+                    this.log(`[RETURN %s]: %s`, req.url, ret);
+                }
+                else {
+                    this.log(`[COMPLET %s] %s`, req.url, res.statusCode);
+                    this.log(`[PARAMS %s]: %s`, req.url, params_str);
+                    this.log(`[RETURN %s]: %s`, req.url, ret);
+                }
+            });
+            req.on('data', data => {
+                request.body += data;
+                const ends = ['l', 'e', '"', ']', '}', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+                const frag = `${data}`.trimEnd();
+                const end = frag[frag.length - 1];
+                if (should_json && ends.includes(end)) {
+                    try {
+                        request.json = JSON.parse(request.body);
+                        request.body = '';
+                        fired = true;
+                        job();
+                    }
+                    catch (_a) {
+                    }
+                }
+            });
+            req.on('end', () => __awaiter(this, void 0, void 0, function* () {
+                if (!fired) {
+                    fired = true;
+                    if (should_json && request.json == undefined) {
+                        res.statusCode = 400;
+                        res.write('Json parse failed');
+                        res.end();
+                    }
+                    else {
+                        job();
+                    }
+                }
             }));
             if (this.options.cors === true) {
                 res.setHeader('Access-Control-Allow-Origin', '*');
@@ -131,6 +147,12 @@ class Web {
             }
         };
         this.options = options;
+        if (undefined == options.logging)
+            options.logging = {};
+        if (undefined == options.logging.color)
+            options.logging.color = true;
+        if (undefined == options.logging.timestamp)
+            options.logging.timestamp = true;
         this.init(app);
         if (options.ssl)
             this.server = https.createServer(options.ssl, this.handleRequest);
@@ -143,98 +165,119 @@ class Web {
     listen(port) {
         if (port)
             this.options.port = port;
-        log(`web server listening localhost:${this.options.port}`);
+        this.info(`web server listening localhost:${this.options.port}`);
         this.server.listen(this.options.port);
     }
     init(ctrls) {
-        this.controllers = { '/': {} };
+        this.app = { '/': {} };
         for (let name in ctrls)
-            this.controllers[name.toLowerCase()] = ctrls[name];
+            this.app[name.toLowerCase()] = ctrls[name];
         if (!this.options.port)
             this.options.port = 5000;
         if (typeof this.options.cors == 'function')
-            this.controllers['/']['cors'] = this.options.cors;
+            this.app['__cors'] = this.options.cors;
         else if (this.options.cors)
-            this.controllers['/']['cors'] = () => { return; };
+            this.app['__cors'] = () => { return; };
         else
-            this.controllers['/']['cors'] = null;
-        this.bindArgs();
-        if (this.options.static)
-            this.map();
+            this.app['__cors'] = null;
+        if (this.options.static) {
+            this.mapping = {};
+            this.map(this.app);
+        }
     }
-    map() {
-        this.mapping = {};
-        for (let c in this.controllers) {
-            for (let m in this.controllers[c]) {
-                if (c != '/') {
-                    let entry = this.controllers[c][m];
-                    if (typeof entry == 'function') {
-                        let key = c.toLowerCase();
-                        let paths = entry.name.match(/.[^A-Z]*/g);
-                        let method = paths.shift().toLowerCase();
-                        for (let path of paths)
-                            key += `/${path.toLowerCase()}`;
-                        this.mapping[`${method}/${key}`] = entry;
-                    }
-                }
+    map(app, baseUrl = '/') {
+        for (let key in app) {
+            const entry = app[key];
+            if (typeof entry == 'function') {
+                const frags = entry.name.match(/(.[^A-Z]*)/g);
+                const method = frags.shift().toLowerCase();
+                this.mapping[`${method}:${baseUrl}${frags.join('').toLowerCase()}`] = entry;
+                this.mapping[`${method}:${baseUrl}${frags.join('_').toLowerCase()}`] = entry;
+            }
+            else if (typeof entry == 'object') {
+                const frags = key.match(/(.[^A-Z]*)/g);
+                this.map(entry, baseUrl + frags.join('').toLowerCase() + '/');
+                this.map(entry, baseUrl + frags.join('_').toLowerCase() + '/');
             }
         }
     }
-    getEntry(the_path, method) {
+    getEntry(path, method) {
         let entry = null;
-        the_path = the_path.toLowerCase();
-        let name = method = method.toLowerCase();
-        let domain = '';
+        path = path.toLowerCase();
+        method = method.toLowerCase();
         if (this.mapping) {
-            name += the_path;
-            if (name in this.mapping) {
-                log(`\x1b[1;34m[FAST-MAPPING ${the_path}]\x1b[0m `);
-                entry = this.mapping[name];
+            const key = `${method}:${path}`;
+            if (key in this.mapping) {
+                this.log('[FAST-MAPPING %s]', path);
+                entry = this.mapping[key];
+            }
+        }
+        if (!entry) {
+            if (method == 'options') {
+                this.log(`[CAPTURED %s CORS]`, path);
+                entry = this.app.__cors;
+            }
+            else {
+                this.warn(`[MISMATCHED %s ]`, path);
+            }
+        }
+        return entry;
+    }
+    dictateArgs(func) {
+        if (func['__args'])
+            return func['__args'];
+        func['__args'] = func.toString()
+            .match(/.*?\(([^)]*)\)/)[1]
+            .split(",")
+            .map(arg => arg.replace(/(\/\*.*\*\/)|\?/, "").trim())
+            .filter(arg => arg);
+        return func['__args'];
+    }
+    info(fmt, ...args) {
+        console.info(this.format('INFO', fmt), ...args);
+    }
+    error(fmt, ...args) {
+        console.error(this.format('ERROR', fmt), ...args);
+    }
+    warn(fmt, ...args) {
+        console.warn(this.format('WARN', fmt), ...args);
+    }
+    log(fmt, ...args) {
+        console.log(this.format('LOG', fmt), ...args);
+    }
+    format(sev, fmt) {
+        var _a, _b;
+        let _fmt = fmt;
+        if (this.options.logging.color) {
+            _fmt = _fmt.replace(/%[^%]/g, sub => `\x1b[1;36m${sub}\x1b[0m`);
+        }
+        if ((_a = this.options.logging) === null || _a === void 0 ? void 0 : _a.color) {
+            switch (sev) {
+                case 'log':
+                case 'LOG':
+                    _fmt = `\x1b[1m${sev}\x1b[0m: ` + _fmt;
+                    break;
+                case 'info':
+                case 'INFO':
+                    _fmt = `\x1b[1;34m${sev}\x1b[0m: ` + _fmt;
+                    break;
+                case 'warn':
+                case 'WARN':
+                    _fmt = `\x1b[1;35m${sev}\x1b[0m: ` + _fmt;
+                    break;
+                case 'error':
+                case 'ERROR':
+                    _fmt = `\x1b[1;31m${sev}\x1b[0m: ` + _fmt;
+                    break;
             }
         }
         else {
-            let splits = the_path == '/' ? ['/'] : the_path.split('/');
-            while (!domain)
-                domain = splits.shift().toLowerCase();
-            for (var path of splits)
-                name += path.charAt(0).toUpperCase() + path.slice(1);
-            if (domain in this.controllers) {
-                let controller = this.controllers[domain];
-                if (name in controller) {
-                    log(`\x1b[1;34m[MAPPING ${the_path} -> ${domain}.${name} ]\x1b[0m `);
-                    entry = controller[name];
-                }
-            }
+            _fmt = sev + ': ' + _fmt;
         }
-        if (!entry)
-            if (method == 'options') {
-                log(`\x1b[1;34m[CAPTURED ${the_path} CORS]\x1b[0m`);
-                entry = this.controllers['/'].cors;
-            }
-            else {
-                log(`\x1b[1;34m[MISMATCHED ${the_path} -> ${domain}.${name} ]\x1b[0m`);
-            }
-        if (typeof entry == 'function' && entry.args == undefined)
-            entry.args = this.getArgs(entry);
-        return entry;
-    }
-    getArgs(func) {
-        return func.toString()
-            .match(/.*?\(([^)]*)\)/)[1]
-            .split(",")
-            .map(arg => {
-            return arg.replace(/(\/\*.*\*\/)|\?/, "").trim();
-        })
-            .filter(arg => { return arg; });
-    }
-    bindArgs() {
-        for (let c in this.controllers) {
-            for (let i in this.controllers[c]) {
-                let method = this.controllers[c][i];
-                if (typeof method == 'function')
-                    method['args'] = this.getArgs(method);
-            }
+        if ((_b = this.options.logging) === null || _b === void 0 ? void 0 : _b.timestamp) {
+            _fmt = `[${(new Date()).toLocaleString()}] ` + _fmt;
         }
+        return _fmt;
     }
 }
 exports.Web = Web;

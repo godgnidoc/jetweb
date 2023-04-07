@@ -78,15 +78,6 @@ export interface Application {
 }
 
 /**
- * @function 打印带时间戳的日志
- * @param args 日志内容
- */
-export function log(...args: any[]) {
-    let date = new Date()
-    console.log(`[${date.toLocaleString()}] => `, ...args)
-}
-
-/**
  * @interface ServerOptions : Web服务器选项
  * @description
  *  此结构用于构造Web服务器时对服务器进行配置
@@ -134,6 +125,24 @@ export interface ServerOptions {
      *  若设置了此选项，则Web服务器会将此对象传入http服务器的构造函数以配置服务器
      */
     http?: http.ServerOptions
+
+    /**
+     * @property 日志相关参数
+     */
+    logging?: {
+
+        /** 
+         * @property 输出日志时是否主动附加时间戳
+         * @default true
+         */
+        timestamp?: boolean
+
+        /** 
+         * @property 输出日志时是否主动附加颜色 
+         * @default true
+         */
+        color?: boolean
+    }
 }
 
 /**
@@ -155,7 +164,12 @@ export class Web {
      */
     constructor(app: Application, options: ServerOptions = {}) {
         this.options = options
+        if (undefined == options.logging) options.logging = {}
+        if (undefined == options.logging.color) options.logging.color = true
+        if (undefined == options.logging.timestamp) options.logging.timestamp = true
+
         this.init(app)
+
         if (options.ssl) this.server = https.createServer(options.ssl, this.handleRequest)
         else if (options.http) this.server = http.createServer(options.http, this.handleRequest)
         else this.server = http.createServer(this.handleRequest)
@@ -168,7 +182,7 @@ export class Web {
      */
     public listen(port?: number) {
         if (port) this.options.port = port
-        log(`web server listening localhost:${this.options.port}`)
+        this.info(`web server listening localhost:${this.options.port}`)
         this.server.listen(this.options.port)
     }
 
@@ -194,11 +208,11 @@ export class Web {
             if (typeof entry == 'function') {
                 const frags = entry.name.match(/(.[^A-Z]*)/g)
                 const method = frags.shift().toLowerCase()
-                this.mapping[`${method}:${baseUrl}${frags.join().toLowerCase()}`] = entry
+                this.mapping[`${method}:${baseUrl}${frags.join('').toLowerCase()}`] = entry
                 this.mapping[`${method}:${baseUrl}${frags.join('_').toLowerCase()}`] = entry
             } else if (typeof entry == 'object') {
                 const frags = key.match(/(.[^A-Z]*)/g)
-                this.map(entry, baseUrl + frags.join().toLowerCase() + '/')
+                this.map(entry, baseUrl + frags.join('').toLowerCase() + '/')
                 this.map(entry, baseUrl + frags.join('_').toLowerCase() + '/')
             }
         }
@@ -217,17 +231,17 @@ export class Web {
         if (this.mapping) {
             const key = `${method}:${path}`
             if (key in this.mapping) {
-                log(`\x1b[1;34m[FAST-MAPPING ${path}]\x1b[0m `)
+                this.log('[FAST-MAPPING %s]', path)
                 entry = this.mapping[key]
             }
         }
 
         if (!entry) {
             if (method == 'options') {
-                log(`\x1b[1;34m[CAPTURED ${path} CORS]\x1b[0m`)
+                this.log(`[CAPTURED %s CORS]`, path)
                 entry = this.app.__cors
             } else {
-                log(`\x1b[1;34m[MISMATCHED ${path} ]\x1b[0m`)
+                this.warn(`[MISMATCHED %s ]`, path)
             }
         }
         return entry
@@ -238,8 +252,8 @@ export class Web {
             this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true })
             this.wsServer.on('connection', (socket: WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
                 setImmediate(() => {
-                    log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`)
-                    socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`) })
+                    this.log('[CONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort)
+                    socket.addListener('close', () => { this.log('[DISCONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort) })
                     if (entry) entry.call(socket, request)
                     else socket.close()
                 })
@@ -258,8 +272,8 @@ export class Web {
         let entry = this.getEntry(url.pathname, req.method)
 
         if (!entry || typeof entry != 'function') {
-            log(`\x1b[1;33m[404 ${req.url}]\x1b[0m`)
             res.statusCode = 404
+            this.error('[%s %s]', res.statusCode, req.url)
             res.write(`Are U lost ?`)
             res.end()
             return
@@ -281,17 +295,16 @@ export class Web {
             let color = '\x1b[1;32m'
             try {
                 ret = await entry.apply(handler, args)
-            } catch (e) {
-                log(e)
+            } catch (e: any) {
+                this.log('%s', e)
                 if (res.statusCode < 400) res.statusCode = 500
-            } finally {
-                if (res.statusCode >= 400) color = '\x1b[1;31m'
             }
+
             if (ret != undefined) {
                 res.setHeader('ContentType', 'application/json')
                 let rets = JSON.stringify(ret)
                 res.write(rets)
-                if (rets.length > 256) ret = rets.slice(0, 256) + ' ...'
+                if (rets.length > 48) ret = rets.slice(0, 40) + ' ...'
             }
             res.end()
 
@@ -299,11 +312,18 @@ export class Web {
             url.searchParams.forEach((v, k) => { params[k] = v })
             if (typeof request.json == 'object') params = { ...params, ...request.json }
             let params_str = JSON.stringify(params)
-            if (params_str.length > 256) params_str = params_str.slice(0, 256) + ' ...'
+            if (params_str.length > 48) params_str = params_str.slice(0, 40) + ' ...'
             else params_str = params
-            log(`${color}[COMPLET ${req.url}] ${res.statusCode}\x1b[0m`)
-            log(`\x1b[1;36m[PARAMS ${req.url}]\x1b[0m\n`, params_str)
-            log(`\x1b[1;36m[RETURN ${req.url}]\x1b[0m\n`, ret)
+
+            if( res.statusCode >= 400 ) {
+                this.error(`[INCOMPLET %s] %s`, req.url, res.statusCode)
+                this.log(`[PARAMS %s]: %s`, req.url, params_str)
+                this.log(`[RETURN %s]: %s`, req.url, ret)
+            } else {
+                this.log(`[COMPLET %s] %s`, req.url, res.statusCode)
+                this.log(`[PARAMS %s]: %s`, req.url, params_str)
+                this.log(`[RETURN %s]: %s`, req.url, ret)
+            }
         }
 
         req.on('data', data => {
@@ -352,5 +372,41 @@ export class Web {
             .map(arg => arg.replace(/(\/\*.*\*\/)|\?/, "").trim())
             .filter(arg => arg)
         return func['__args']
+    }
+
+    public info(fmt: string, ...args: any[]) {
+        console.info(this.format('INFO', fmt), ...args)
+    }
+    public error(fmt: string, ...args: any[]) {
+        console.error(this.format('ERROR', fmt), ...args)
+    }
+    public warn(fmt: string, ...args: any[]) {
+        console.warn(this.format('WARN', fmt), ...args)
+    }
+    public log(fmt: string, ...args: any[]) {
+        console.log(this.format('LOG', fmt), ...args)
+    }
+
+    private format(sev: string, fmt: string) {
+        let _fmt = fmt
+        if (this.options.logging.color) {
+            _fmt = _fmt.replace(/%[^%]/g, sub=>`\x1b[1;36m${sub}\x1b[0m`)
+        }
+
+        if (this.options.logging?.color) {
+            switch (sev) {
+                case 'log': case 'LOG': _fmt = `\x1b[1m${sev}\x1b[0m: ` + _fmt; break;
+                case 'info': case 'INFO': _fmt = `\x1b[1;34m${sev}\x1b[0m: ` + _fmt; break;
+                case 'warn': case 'WARN': _fmt = `\x1b[1;35m${sev}\x1b[0m: ` + _fmt; break;
+                case 'error': case 'ERROR': _fmt = `\x1b[1;31m${sev}\x1b[0m: ` + _fmt; break;
+            }
+        } else {
+            _fmt = sev + ': ' + _fmt
+        }
+
+        if (this.options.logging?.timestamp) {
+            _fmt = `[${(new Date()).toLocaleString()}] ` + _fmt
+        }
+        return _fmt
     }
 }
