@@ -65,19 +65,11 @@ declare module "jetweb" {
     type WebSocketHandler = (this: WebSocket, request: http.IncomingMessage) => void
     type RequestHandler = (this:RequestContext, ... args: any[] )=>void
 
-
-    /**
-     * @interface Controller : 控制器接口
-     */
-    interface Controller {
-        [index:string] : WebSocketHandler | RequestHandler
-    }
-
     /**
      * @interface Application : 应用接口
      */
     interface Application {
-        [index:string] : Controller
+        [index:string] : RequestHandler | WebSocketHandler | Application
     }
 
     /**

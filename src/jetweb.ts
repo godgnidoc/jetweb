@@ -2,7 +2,7 @@ import * as https from 'https'
 import * as http from 'http'
 import * as net from 'net'
 import * as ws from 'ws'
-import {URL} from 'url'
+import { URL } from 'url'
 
 /**
  * @type WebSocket : WebSocket连接
@@ -23,7 +23,7 @@ export class Request {
      * @description
      *  http模块提供的用于处理输入信息的源对象
      */
-    incomingMessage : http.IncomingMessage
+    incomingMessage: http.IncomingMessage
 
     /**
      * @property json : json参数
@@ -40,7 +40,7 @@ export class Request {
      */
     body: string = ''
 
-    constructor( request : http.IncomingMessage ) {
+    constructor(request: http.IncomingMessage) {
         this.incomingMessage = request
     }
 }
@@ -57,41 +57,33 @@ export class RequestContext {
      * @description
      *  请求对象包含了关于客户端请求的所有信息
      */
-    request : Request
+    request: Request
 
     /**
      * @property respons : 响应对象
      * @description
      *  通过响应对象，您可以手动指定一些响应操作
      */
-    response : http.ServerResponse
+    response: http.ServerResponse
 }
 
 export type WebSocketHandler = (this: WebSocket, request: http.IncomingMessage) => void
-export type RequestHandler = (this:RequestContext, ... args: any[] )=>void
-
-
-/**
- * @interface Controller : 控制器接口
- */
-export interface Controller {
-    [index:string] : WebSocketHandler | RequestHandler
-}
+export type RequestHandler = (this: RequestContext, ...args: any[]) => void
 
 /**
  * @interface Application : 应用接口
  */
 export interface Application {
-    [index:string] : Controller
+    [index: string]: WebSocketHandler | RequestHandler | Application
 }
 
 /**
  * @function 打印带时间戳的日志
  * @param args 日志内容
  */
-export function log( ... args : any[] ) {
-    let date = new Date()    
-    console.log(`[${date.toLocaleString()}] => `, ... args)
+export function log(...args: any[]) {
+    let date = new Date()
+    console.log(`[${date.toLocaleString()}] => `, ...args)
 }
 
 /**
@@ -141,7 +133,7 @@ export interface ServerOptions {
      * @description
      *  若设置了此选项，则Web服务器会将此对象传入http服务器的构造函数以配置服务器
      */
-    http ?: http.ServerOptions
+    http?: http.ServerOptions
 }
 
 /**
@@ -150,22 +142,22 @@ export interface ServerOptions {
  *  将此类实例化以运行服务器
  */
 export class Web {
-    controllers : Application
-    server : http.Server | https.Server
-    wsServer : ws.Server
-    mapping : object
-    options : ServerOptions
+    app: Application
+    server: http.Server | https.Server
+    wsServer: ws.Server
+    mapping: object
+    options: ServerOptions
 
     /**
      * @constructor
      * @param app 应用对象
      * @param options 服务器选项
      */
-    constructor( app : Application, options : ServerOptions = {} ) {
+    constructor(app: Application, options: ServerOptions = {}) {
         this.options = options
         this.init(app)
-        if( options.ssl ) this.server = https.createServer(options.ssl,this.handleRequest)
-        else if( options.http ) this.server = http.createServer(options.http, this.handleRequest)
+        if (options.ssl) this.server = https.createServer(options.ssl, this.handleRequest)
+        else if (options.http) this.server = http.createServer(options.http, this.handleRequest)
         else this.server = http.createServer(this.handleRequest)
         this.server.on('upgrade', this.handleWebSocket)
     }
@@ -174,41 +166,40 @@ export class Web {
      * @method listen 运行服务器
      * @param port 端口号，若设置此参数，可覆盖配置项
      */
-    public listen( port ?: number ) {
-        if( port ) this.options.port = port
+    public listen(port?: number) {
+        if (port) this.options.port = port
         log(`web server listening localhost:${this.options.port}`)
         this.server.listen(this.options.port)
     }
 
-    private init( ctrls : Application ) {
-        this.controllers = {'/':{}}
-        for( let name in ctrls ) this.controllers[name.toLowerCase()] = ctrls[name]
+    private init(ctrls: Application) {
+        this.app = { '/': {} }
+        for (let name in ctrls) this.app[name.toLowerCase()] = ctrls[name]
 
-        if( !this.options.port ) this.options.port = 5000
+        if (!this.options.port) this.options.port = 5000
 
-        if( typeof this.options.cors == 'function' ) this.controllers['/']['cors'] = this.options.cors
-        else if( this.options.cors ) this.controllers['/']['cors'] = ()=>{return}
-        else this.controllers['/']['cors'] = null
+        if (typeof this.options.cors == 'function') this.app['__cors'] = this.options.cors
+        else if (this.options.cors) this.app['__cors'] = () => { return }
+        else this.app['__cors'] = null
 
-        this.bindArgs()
-
-        if( this.options.static ) this.map()
+        if (this.options.static) {
+            this.mapping = {}
+            this.map(this.app)
+        }
     }
 
-    private map() {
-        this.mapping = {}
-        for( let c in this.controllers ) {
-            for( let m in this.controllers[c] ) {
-                if( c != '/' ) {
-                    let entry = this.controllers[c][m]
-                    if( typeof entry == 'function' ) {
-                        let key = c.toLowerCase()
-                        let paths = entry.name.match(/.[^A-Z]*/g)
-                        let method = paths.shift().toLowerCase()
-                        for( let path of paths ) key += `/${path.toLowerCase()}`
-                        this.mapping[`${method}/${key}`] = entry
-                    }
-                }
+    private map(app: Application, baseUrl = '/') {
+        for (let key in app) {
+            const entry = app[key]
+            if (typeof entry == 'function') {
+                const frags = entry.name.match(/(.[^A-Z]*)/g)
+                const method = frags.shift().toLowerCase()
+                this.mapping[`${method}:${baseUrl}${frags.join().toLowerCase()}`] = entry
+                this.mapping[`${method}:${baseUrl}${frags.join('_').toLowerCase()}`] = entry
+            } else if (typeof entry == 'object') {
+                const frags = key.match(/(.[^A-Z]*)/g)
+                this.map(entry, baseUrl + frags.join().toLowerCase() + '/')
+                this.map(entry, baseUrl + frags.join('_').toLowerCase() + '/')
             }
         }
     }
@@ -216,149 +207,150 @@ export class Web {
     /**
      * @method getEntry : 获取入口
      * @description 通过请求路径和方法确定路由入口，确保入口不需要后续处理，确保入口参数列表被指定
-     * @param the_path 请求路径
+     * @param path 请求路径
      * @param method 请求方法
      */
-    private getEntry( the_path : string, method : string ) : WebSocketHandler | RequestHandler {
+    private getEntry(path: string, method: string): WebSocketHandler | RequestHandler {
         let entry = null
-        the_path = the_path.toLowerCase()
-        let name = method = method.toLowerCase()
-        let domain = ''
-        if( this.mapping ) {
-            name += the_path
-            if( name in this.mapping ) {
-                log(`\x1b[1;34m[FAST-MAPPING ${the_path}]\x1b[0m `)
-                entry = this.mapping[name]
-            }
-        } else {
-            let splits = the_path == '/'?['/']:the_path.split('/')
-            while( !domain ) domain = splits.shift().toLowerCase()
-            for( var path of splits ) name += path.charAt(0).toUpperCase() + path.slice(1)
-            if( domain in this.controllers ) {
-                let controller = this.controllers[domain]
-                if( name in controller ) {
-                    log(`\x1b[1;34m[MAPPING ${the_path} -> ${domain}.${name} ]\x1b[0m `)
-                    entry = controller[name]
-                }
+        path = path.toLowerCase()
+        method = method.toLowerCase()
+        if (this.mapping) {
+            const key = `${method}:${path}`
+            if (key in this.mapping) {
+                log(`\x1b[1;34m[FAST-MAPPING ${path}]\x1b[0m `)
+                entry = this.mapping[key]
             }
         }
-        if( !entry )
-            if( method == 'options' ) {
-                log(`\x1b[1;34m[CAPTURED ${the_path} CORS]\x1b[0m`)
-                entry = this.controllers['/'].cors
+
+        if (!entry) {
+            if (method == 'options') {
+                log(`\x1b[1;34m[CAPTURED ${path} CORS]\x1b[0m`)
+                entry = this.app.__cors
             } else {
-                log(`\x1b[1;34m[MISMATCHED ${the_path} -> ${domain}.${name} ]\x1b[0m`)
+                log(`\x1b[1;34m[MISMATCHED ${path} ]\x1b[0m`)
             }
-        if( typeof entry == 'function' && entry.args == undefined ) entry.args = this.getArgs(entry)
+        }
         return entry
     }
 
-    private handleWebSocket = (request : http.IncomingMessage, socket : net.Socket, head: Buffer ) => {
-        if( !this.wsServer ) {
-            this.wsServer = new ws.Server({noServer:true,clientTracking:false,perMessageDeflate:true})
-            this.wsServer.on('connection', ( socket : WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
-                setImmediate(()=>{
+    private handleWebSocket = (request: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+        if (!this.wsServer) {
+            this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true })
+            this.wsServer.on('connection', (socket: WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
+                setImmediate(() => {
                     log(`\x1b[34m[CONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`)
-                    socket.addListener('close', () => {log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`)})
-                    if( entry ) entry.call(socket, request)
+                    socket.addListener('close', () => { log(`\x1b[34m[DISCONNECT ${request.url}]\x1b[0m${request.socket.remoteAddress}:${request.socket.remotePort}`) })
+                    if (entry) entry.call(socket, request)
                     else socket.close()
                 })
             })
         }
-        let url = new URL('http://localhost'+request.url)
+        let url = new URL('http://localhost' + request.url)
         let entry = this.getEntry(url.pathname, 'ws')
-        if( !entry ) {socket.destroy(); return}
-        this.wsServer.handleUpgrade(request,socket,head, (client: WebSocket) => {
+        if (!entry) { socket.destroy(); return }
+        this.wsServer.handleUpgrade(request, socket, head, (client: WebSocket) => {
             this.wsServer.emit('connection', client, request, entry)
         })
     }
 
-    private handleRequest = ( req : http.IncomingMessage, res : http.ServerResponse) => {
-        let url = new URL('http://localhost'+req.url)
+    private handleRequest = (req: http.IncomingMessage, res: http.ServerResponse) => {
+        let url = new URL('http://localhost' + req.url)
         let entry = this.getEntry(url.pathname, req.method)
-        
-        if( !entry || typeof entry != 'function' ) {
+
+        if (!entry || typeof entry != 'function') {
             log(`\x1b[1;33m[404 ${req.url}]\x1b[0m`)
             res.statusCode = 404
             res.write(`Are U lost ?`)
             res.end()
             return
         }
-        
-        let request = new Request(req)
-        req.on('data', data => {request.body += data})
-        req.on('end', async () => {
-            if( 'content-type' in req.headers && req.headers["content-type"].match(/.*application\/json.*/) ) {
-                try {
-                    request.json = JSON.parse(request.body)
-                    request.body = undefined
-                } catch( e ) {
-                    res.statusCode = 400
-                    res.write('Json parsing failed')
-                    res.end()
-                    return
-                }
-            }
 
-            let handler : RequestContext = {response: res,request}
+        let request = new Request(req)
+        let should_json = 'content-type' in req.headers && undefined != req.headers["content-type"].match(/.*application\/json.*/)
+        let fired = false
+
+        const job = async () => {
+            let handler: RequestContext = { response: res, request }
             let args = []
-            for( let name of entry['args'] )
-                if( typeof request.json == 'object' && name in request.json ) args.push(request.json[name])
-                else if( url.searchParams.has(name) ) args.push( url.searchParams.get(name))
+            for (let name of this.dictateArgs(entry))
+                if (typeof request.json == 'object' && name in request.json) args.push(request.json[name])
+                else if (url.searchParams.has(name)) args.push(url.searchParams.get(name))
                 else args.push(undefined)
 
             let ret = undefined
             let color = '\x1b[1;32m'
             try {
                 ret = await entry.apply(handler, args)
-            } catch( e ) {
+            } catch (e) {
                 log(e)
-                if( res.statusCode < 400 ) res.statusCode = 500
+                if (res.statusCode < 400) res.statusCode = 500
             } finally {
-                if( res.statusCode >= 400 ) color = '\x1b[1;31m'
+                if (res.statusCode >= 400) color = '\x1b[1;31m'
             }
-            if( ret != undefined ) {
+            if (ret != undefined) {
                 res.setHeader('ContentType', 'application/json')
                 let rets = JSON.stringify(ret)
                 res.write(rets)
-                if( rets.length > 256 ) ret = rets.slice(0,256) + ' ...'
+                if (rets.length > 256) ret = rets.slice(0, 256) + ' ...'
             }
             res.end()
 
-            let params : any = {}
-            url.searchParams.forEach((v,k)=>{params[k] = v})
-            if( typeof request.json == 'object' ) params = {...params, ...request.json}
+            let params: any = {}
+            url.searchParams.forEach((v, k) => { params[k] = v })
+            if (typeof request.json == 'object') params = { ...params, ...request.json }
             let params_str = JSON.stringify(params)
-            if( params_str.length > 256 ) params_str = params_str.slice(0, 256) + ' ...'
+            if (params_str.length > 256) params_str = params_str.slice(0, 256) + ' ...'
             else params_str = params
             log(`${color}[COMPLET ${req.url}] ${res.statusCode}\x1b[0m`)
             log(`\x1b[1;36m[PARAMS ${req.url}]\x1b[0m\n`, params_str)
             log(`\x1b[1;36m[RETURN ${req.url}]\x1b[0m\n`, ret)
+        }
+
+        req.on('data', data => {
+            request.body += data
+            const ends = ['l', 'e', '"', ']', '}', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+            const frag = `${data}`.trimEnd()
+            const end = frag[frag.length - 1]
+
+            if (should_json && ends.includes(end)) {
+                try {
+                    request.json = JSON.parse(request.body)
+                    request.body = ''
+                    fired = true
+                    job()
+                } catch {
+                    /** nothing to be done */
+                }
+            }
         })
-        if( this.options.cors === true ) {
-            res.setHeader('Access-Control-Allow-Origin','*')
-            res.setHeader('Access-Control-Allow-Methods','GET,POST')
-            res.setHeader('Access-Control-Allow-Headers','x-requested-with,content-type')
+
+        req.on('end', async () => {
+            if (!fired) {
+                fired = true
+                if (should_json && request.json == undefined) {
+                    res.statusCode = 400
+                    res.write('Json parse failed')
+                    res.end()
+                } else {
+                    job()
+                }
+            }
+        })
+
+        if (this.options.cors === true) {
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET,POST')
+            res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type')
         }
     }
 
-    private getArgs(func : Function ) : string[] {
-        return func.toString()
+    private dictateArgs(func: Function): string[] {
+        if (func['__args']) return func['__args']
+        func['__args'] = func.toString()
             .match(/.*?\(([^)]*)\)/)[1]
             .split(",")
-            .map(arg => {
-                return arg.replace(/(\/\*.*\*\/)|\?/, "").trim()
-            })
-            .filter( arg => {return arg})
-    }
-
-    private bindArgs() : void {
-        for( let c in this.controllers ) {
-            for( let i in this.controllers[c] ) {
-                let method = this.controllers[c][i]
-                if( typeof method == 'function' )
-                    method['args'] = this.getArgs(method)
-            }
-        }
+            .map(arg => arg.replace(/(\/\*.*\*\/)|\?/, "").trim())
+            .filter(arg => arg)
+        return func['__args']
     }
 }
