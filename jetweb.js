@@ -61,8 +61,11 @@ class Web {
                 return;
             }
             let request = new Request(req);
-            let should_json = 'content-type' in req.headers && undefined != req.headers["content-type"].match(/.*application\/json.*/);
-            let fired = false;
+            if (this.options.cors === true) {
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Access-Control-Allow-Methods', 'GET,POST');
+                res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type');
+            }
             const job = () => __awaiter(this, void 0, void 0, function* () {
                 let handler = { response: res, request };
                 let args = [];
@@ -74,7 +77,6 @@ class Web {
                     else
                         args.push(undefined);
                 let ret = undefined;
-                let color = '\x1b[1;32m';
                 try {
                     ret = yield entry.apply(handler, args);
                 }
@@ -111,42 +113,25 @@ class Web {
                     this.log(`[RETURN %s]: %s`, req.url, ret);
                 }
             });
-            req.on('data', data => {
-                request.body += data;
-                if (fired)
-                    return;
-                const ends = ['l', 'e', '"', ']', '}', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-                const frag = `${data}`.trimEnd();
-                const end = frag[frag.length - 1];
-                if (should_json && ends.includes(end)) {
-                    try {
-                        request.json = JSON.parse(request.body);
-                        request.body = '';
-                        fired = true;
-                        job();
-                    }
-                    catch (_a) {
-                    }
-                }
-            });
+            if (!('content-type' in req.headers) ||
+                undefined == req.headers["content-type"].toLowerCase().match(/.*application\/json.*/)) {
+                job();
+                return;
+            }
+            req.on('data', data => { request.body += data; });
             req.on('end', () => __awaiter(this, void 0, void 0, function* () {
-                if (!fired) {
-                    fired = true;
-                    if (should_json && request.json == undefined) {
-                        res.statusCode = 400;
-                        res.write('Json parse failed');
-                        res.end();
-                    }
-                    else {
-                        job();
-                    }
+                try {
+                    request.json = JSON.parse(request.body);
+                    request.body = undefined;
+                    job();
+                }
+                catch (_a) {
+                    res.statusCode = 400;
+                    res.write('Json parse failed');
+                    res.end();
+                    return;
                 }
             }));
-            if (this.options.cors === true) {
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                res.setHeader('Access-Control-Allow-Methods', 'GET,POST');
-                res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type');
-            }
         };
         this.options = options;
         if (undefined == options.logging)
@@ -212,6 +197,43 @@ class Web {
             if (key in this.mapping) {
                 this.log('[FAST-MAPPING %s]', path);
                 entry = this.mapping[key];
+            }
+        }
+        else {
+            const frags = path.split('/');
+            const final = method + frags.pop();
+            let app = this.app;
+            while (frags.length > 0) {
+                const key = frags.shift();
+                if (key in app) {
+                    const inner = app[key];
+                    if (typeof inner == 'function') {
+                        this.warn(`[MISMATCHED %s ]`, path);
+                        app = null;
+                        break;
+                    }
+                    app = inner;
+                }
+                else {
+                    this.warn(`[MISMATCHED %s ]`, path);
+                    app = null;
+                    break;
+                }
+            }
+            if (app) {
+                if (final in app) {
+                    const inner = app[final];
+                    if (typeof inner == 'function') {
+                        this.log(`[MAPPING %s ]`, path);
+                        entry = inner;
+                    }
+                    else {
+                        this.warn(`[MISMATCHED %s ]`, path);
+                    }
+                }
+                else {
+                    this.warn(`[MISMATCHED %s ]`, path);
+                }
             }
         }
         if (!entry) {

@@ -229,13 +229,49 @@ export class Web {
         path = path.toLowerCase()
         method = method.toLowerCase()
         if (this.mapping) {
+            // 快速查找
             const key = `${method}:${path}`
             if (key in this.mapping) {
                 this.log('[FAST-MAPPING %s]', path)
                 entry = this.mapping[key]
             }
+        } else {
+            // 逐级查找
+            const frags = path.split('/')
+            const final = method + frags.pop()
+            let app = this.app
+            while( frags.length > 0 ) {
+                const key = frags.shift()
+                if (key in app) {
+                    const inner = app[key]
+                    if( typeof inner == 'function' ) {
+                        this.warn(`[MISMATCHED %s ]`, path)
+                        app = null
+                        break
+                    }
+                    app = inner
+                } else {
+                    this.warn(`[MISMATCHED %s ]`, path)
+                    app = null
+                    break
+                }
+            }
+            if (app) {
+                if (final in app) {
+                    const inner = app[final]
+                    if (typeof inner == 'function') {
+                        this.log(`[MAPPING %s ]`, path)
+                        entry = inner
+                    } else {
+                        this.warn(`[MISMATCHED %s ]`, path)
+                    }
+                } else {
+                    this.warn(`[MISMATCHED %s ]`, path)
+                }
+            }
         }
 
+        // CORS
         if (!entry) {
             if (method == 'options') {
                 this.log(`[CAPTURED %s CORS]`, path)
@@ -280,7 +316,11 @@ export class Web {
         }
 
         let request = new Request(req)
-        let should_json = 'content-type' in req.headers && undefined != req.headers["content-type"].match(/.*application\/json.*/)
+        if (this.options.cors === true) {
+            res.setHeader('Access-Control-Allow-Origin', '*')
+            res.setHeader('Access-Control-Allow-Methods', 'GET,POST')
+            res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type')
+        }
 
         const job = async () => {
             let handler: RequestContext = { response: res, request }
@@ -291,7 +331,6 @@ export class Web {
                 else args.push(undefined)
 
             let ret = undefined
-            let color = '\x1b[1;32m'
             try {
                 ret = await entry.apply(handler, args)
             } catch (e: any) {
@@ -325,27 +364,26 @@ export class Web {
             }
         }
 
+        if (
+            !('content-type' in req.headers) ||
+            undefined == req.headers["content-type"].toLowerCase().match(/.*application\/json.*/)) {
+            job()
+            return
+        }
+
         req.on('data', data => { request.body += data })
         req.on('end', async () => {
-            if (should_json) {
-                try {
-                    request.json = JSON.parse(request.body)
-                    request.body = undefined
-                } catch {
-                    res.statusCode = 400
-                    res.write('Json parse failed')
-                    res.end()
-                    return
-                }
+            try {
+                request.json = JSON.parse(request.body)
+                request.body = undefined
+                job()
+            } catch {
+                res.statusCode = 400
+                res.write('Json parse failed')
+                res.end()
+                return
             }
-            job()
         })
-
-        if (this.options.cors === true) {
-            res.setHeader('Access-Control-Allow-Origin', '*')
-            res.setHeader('Access-Control-Allow-Methods', 'GET,POST')
-            res.setHeader('Access-Control-Allow-Headers', 'x-requested-with,content-type')
-        }
     }
 
     private dictateArgs(func: Function): string[] {
