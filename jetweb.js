@@ -155,10 +155,8 @@ class Web {
         this.info(`web server listening localhost:${this.options.port}`);
         this.server.listen(this.options.port);
     }
-    init(ctrls) {
-        this.app = { '/': {} };
-        for (let name in ctrls)
-            this.app[name.toLowerCase()] = ctrls[name];
+    init(app) {
+        this.app = app;
         if (!this.options.port)
             this.options.port = 5000;
         if (typeof this.options.cors == 'function')
@@ -170,6 +168,8 @@ class Web {
         if (this.options.static) {
             this.mapping = {};
             this.map(this.app);
+            console.log("static mapping:");
+            console.dir(Object.keys(this.mapping));
         }
     }
     map(app, baseUrl = '/') {
@@ -188,9 +188,9 @@ class Web {
             }
         }
     }
-    getEntry(path, method) {
+    getEntry(raw_path, method) {
         let entry = null;
-        path = path.toLowerCase();
+        const path = raw_path.toLowerCase();
         method = method.toLowerCase();
         if (this.mapping) {
             const key = `${method}:${path}`;
@@ -199,50 +199,38 @@ class Web {
                 entry = this.mapping[key];
             }
         }
-        else {
-            const frags = path.split('/');
+        if (!entry) {
+            const frags = raw_path.split('/').filter(x => x);
             const final = method + frags.pop();
             let app = this.app;
+            console.dir(frags);
             while (frags.length > 0) {
                 const key = frags.shift();
+                console.log("key: %s keys: %s", key, Object.keys(app).join(","));
                 if (key in app) {
                     const inner = app[key];
                     if (typeof inner == 'function') {
-                        this.warn(`[MISMATCHED %s ]`, path);
                         app = null;
                         break;
                     }
                     app = inner;
                 }
                 else {
-                    this.warn(`[MISMATCHED %s ]`, path);
                     app = null;
                     break;
                 }
             }
-            if (app) {
-                if (final in app) {
-                    const inner = app[final];
-                    if (typeof inner == 'function') {
-                        this.log(`[MAPPING %s ]`, path);
-                        entry = inner;
-                    }
-                    else {
-                        this.warn(`[MISMATCHED %s ]`, path);
-                    }
-                }
-                else {
-                    this.warn(`[MISMATCHED %s ]`, path);
-                }
+            if (app && final in app && typeof app[final] == 'function') {
+                entry = app[final];
             }
         }
         if (!entry) {
             if (method == 'options') {
-                this.log(`[CAPTURED %s CORS]`, path);
+                this.log(`[CAPTURED %s CORS]`, raw_path);
                 entry = this.app.__cors;
             }
             else {
-                this.warn(`[MISMATCHED %s ]`, path);
+                this.warn(`[MISMATCHED %s ]`, raw_path);
             }
         }
         return entry;

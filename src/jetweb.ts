@@ -186,9 +186,8 @@ export class Web {
         this.server.listen(this.options.port)
     }
 
-    private init(ctrls: Application) {
-        this.app = { '/': {} }
-        for (let name in ctrls) this.app[name.toLowerCase()] = ctrls[name]
+    private init(app: Application) {
+        this.app = app
 
         if (!this.options.port) this.options.port = 5000
 
@@ -199,6 +198,8 @@ export class Web {
         if (this.options.static) {
             this.mapping = {}
             this.map(this.app)
+            console.log("static mapping:")
+            console.dir(Object.keys(this.mapping))
         }
     }
 
@@ -224,9 +225,9 @@ export class Web {
      * @param path 请求路径
      * @param method 请求方法
      */
-    private getEntry(path: string, method: string): WebSocketHandler | RequestHandler {
+    private getEntry(raw_path: string, method: string): WebSocketHandler | RequestHandler {
         let entry = null
-        path = path.toLowerCase()
+        const path = raw_path.toLowerCase()
         method = method.toLowerCase()
         if (this.mapping) {
             // 快速查找
@@ -235,49 +236,39 @@ export class Web {
                 this.log('[FAST-MAPPING %s]', path)
                 entry = this.mapping[key]
             }
-        } else {
+        }
+
+        if (!entry) {
             // 逐级查找
-            const frags = path.split('/')
+            const frags = raw_path.split('/').filter(x => x)
             const final = method + frags.pop()
             let app = this.app
-            while( frags.length > 0 ) {
+            while (frags.length > 0) {
                 const key = frags.shift()
                 if (key in app) {
                     const inner = app[key]
-                    if( typeof inner == 'function' ) {
-                        this.warn(`[MISMATCHED %s ]`, path)
+                    if (typeof inner == 'function') {
                         app = null
                         break
                     }
                     app = inner
                 } else {
-                    this.warn(`[MISMATCHED %s ]`, path)
                     app = null
                     break
                 }
             }
-            if (app) {
-                if (final in app) {
-                    const inner = app[final]
-                    if (typeof inner == 'function') {
-                        this.log(`[MAPPING %s ]`, path)
-                        entry = inner
-                    } else {
-                        this.warn(`[MISMATCHED %s ]`, path)
-                    }
-                } else {
-                    this.warn(`[MISMATCHED %s ]`, path)
-                }
+            if (app && final in app && typeof app[final] == 'function') {
+                entry = app[final]
             }
         }
 
         // CORS
         if (!entry) {
             if (method == 'options') {
-                this.log(`[CAPTURED %s CORS]`, path)
+                this.log(`[CAPTURED %s CORS]`, raw_path)
                 entry = this.app.__cors
             } else {
-                this.warn(`[MISMATCHED %s ]`, path)
+                this.warn(`[MISMATCHED %s ]`, raw_path)
             }
         }
         return entry
