@@ -198,8 +198,7 @@ export class Web {
         if (this.options.static) {
             this.mapping = {}
             this.map(this.app)
-            console.log("static mapping:")
-            console.dir(Object.keys(this.mapping))
+            console.debug("static mapping:", Object.keys(this.mapping))
         }
     }
 

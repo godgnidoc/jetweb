@@ -168,8 +168,7 @@ class Web {
         if (this.options.static) {
             this.mapping = {};
             this.map(this.app);
-            console.log("static mapping:");
-            console.dir(Object.keys(this.mapping));
+            console.debug("static mapping:", Object.keys(this.mapping));
         }
     }
     map(app, baseUrl = '/') {
@@ -203,10 +202,8 @@ class Web {
             const frags = raw_path.split('/').filter(x => x);
             const final = method + frags.pop();
             let app = this.app;
-            console.dir(frags);
             while (frags.length > 0) {
                 const key = frags.shift();
-                console.log("key: %s keys: %s", key, Object.keys(app).join(","));
                 if (key in app) {
                     const inner = app[key];
                     if (typeof inner == 'function') {
