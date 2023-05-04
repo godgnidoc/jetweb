@@ -198,7 +198,8 @@ export class Web {
         if (this.options.static) {
             this.mapping = {}
             this.map(this.app)
-            console.debug("static mapping:", Object.keys(this.mapping))
+            console.debug("static mapping:", Object.keys(this.mapping)
+                .map(key => (key + ' => ' + this.dictateArgs(this.mapping[key]).toString())))
         }
     }
 
@@ -206,7 +207,7 @@ export class Web {
         for (let key in app) {
             const entry = app[key]
             if (typeof entry == 'function') {
-                const frags = entry.name.match(/(.[^A-Z]*)/g)
+                const frags = key.match(/(.[^A-Z]*)/g)
                 const method = frags.shift().toLowerCase()
                 this.mapping[`${method}:${baseUrl}${frags.join('').toLowerCase()}`] = entry
                 this.mapping[`${method}:${baseUrl}${frags.join('_').toLowerCase()}`] = entry
@@ -407,10 +408,10 @@ export class Web {
 
         if (this.options.logging?.color) {
             switch (sev) {
-                case 'log': case 'LOG': _fmt = `\x1b[1m${sev}\x1b[0m: ` + _fmt; break;
-                case 'info': case 'INFO': _fmt = `\x1b[1;34m${sev}\x1b[0m: ` + _fmt; break;
-                case 'warn': case 'WARN': _fmt = `\x1b[1;35m${sev}\x1b[0m: ` + _fmt; break;
-                case 'error': case 'ERROR': _fmt = `\x1b[1;31m${sev}\x1b[0m: ` + _fmt; break;
+                case 'log': case 'LOG': _fmt = `\x1b[1m${sev}\x1b[0m: ` + _fmt; break
+                case 'info': case 'INFO': _fmt = `\x1b[1;34m${sev}\x1b[0m: ` + _fmt; break
+                case 'warn': case 'WARN': _fmt = `\x1b[1;35m${sev}\x1b[0m: ` + _fmt; break
+                case 'error': case 'ERROR': _fmt = `\x1b[1;31m${sev}\x1b[0m: ` + _fmt; break
             }
         } else {
             _fmt = sev + ': ' + _fmt

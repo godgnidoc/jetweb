@@ -168,14 +168,15 @@ class Web {
         if (this.options.static) {
             this.mapping = {};
             this.map(this.app);
-            console.debug("static mapping:", Object.keys(this.mapping));
+            console.debug("static mapping:", Object.keys(this.mapping)
+                .map(key => (key + ' => ' + this.dictateArgs(this.mapping[key]).toString())));
         }
     }
     map(app, baseUrl = '/') {
         for (let key in app) {
             const entry = app[key];
             if (typeof entry == 'function') {
-                const frags = entry.name.match(/(.[^A-Z]*)/g);
+                const frags = key.match(/(.[^A-Z]*)/g);
                 const method = frags.shift().toLowerCase();
                 this.mapping[`${method}:${baseUrl}${frags.join('').toLowerCase()}`] = entry;
                 this.mapping[`${method}:${baseUrl}${frags.join('_').toLowerCase()}`] = entry;
