@@ -143,6 +143,15 @@ export interface ServerOptions {
          */
         color?: boolean
     }
+
+    /**
+     * @property catch : 异常捕捉器
+     * @description 
+     * 此选项用于捕捉接口函数中的异常
+     * 若设置了此选项，则当接口函数中抛出异常时，将会调用此函数
+     * @default undefined
+     */
+    catch?: RequestHandler
 }
 
 /**
@@ -182,7 +191,7 @@ export class Web {
      */
     public listen(port?: number) {
         if (port) this.options.port = port
-        this.info(`web server listening localhost:${this.options.port}`)
+        console.info(`web server listening localhost:${this.options.port}`)
         this.server.listen(this.options.port)
     }
 
@@ -233,7 +242,7 @@ export class Web {
             // 快速查找
             const key = `${method}:${path}`
             if (key in this.mapping) {
-                this.log('[FAST-MAPPING %s]', path)
+                console.log('[FAST-MAPPING %s]', path)
                 entry = this.mapping[key]
             }
         }
@@ -265,10 +274,10 @@ export class Web {
         // CORS
         if (!entry) {
             if (method == 'options') {
-                this.log(`[CAPTURED %s CORS]`, raw_path)
+                console.log(`[CAPTURED %s CORS]`, raw_path)
                 entry = this.app.__cors
             } else {
-                this.warn(`[MISMATCHED %s ]`, raw_path)
+                console.warn(`[MISMATCHED %s ]`, raw_path)
             }
         }
         return entry
@@ -279,8 +288,8 @@ export class Web {
             this.wsServer = new ws.Server({ noServer: true, clientTracking: false, perMessageDeflate: true })
             this.wsServer.on('connection', (socket: WebSocket, request: http.IncomingMessage, entry: WebSocketHandler) => {
                 setImmediate(() => {
-                    this.log('[CONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort)
-                    socket.addListener('close', () => { this.log('[DISCONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort) })
+                    console.log('[CONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort)
+                    socket.addListener('close', () => { console.log('[DISCONNECT %s]%s:%s', request.url, request.socket.remoteAddress, request.socket.remotePort) })
                     if (entry) entry.call(socket, request)
                     else socket.close()
                 })
@@ -300,7 +309,7 @@ export class Web {
 
         if (!entry || typeof entry != 'function') {
             res.statusCode = 404
-            this.error('[%s %s]', res.statusCode, req.url)
+            console.error('[%s %s]', res.statusCode, req.url)
             res.write(`Are U lost ?`)
             res.end()
             return
@@ -325,8 +334,13 @@ export class Web {
             try {
                 ret = await entry.apply(handler, args)
             } catch (e: any) {
-                this.log('%s', e)
+                console.error('%s', e)
                 if (res.statusCode < 400) res.statusCode = 500
+                try {
+                    if (this.options.catch) ret = await this.options.catch.call(handler, e)
+                } catch (e) {
+                    console.error('%s', e)
+                }
             }
 
             if (ret != undefined) {
@@ -345,13 +359,13 @@ export class Web {
             else params_str = params
 
             if (res.statusCode >= 400) {
-                this.error(`[INCOMPLET %s] %s`, req.url, res.statusCode)
-                this.log(`[PARAMS %s]: %s`, req.url, params_str)
-                this.log(`[RETURN %s]: %s`, req.url, ret)
+                console.error(`[INCOMPLET %s] %s`, req.url, res.statusCode)
+                console.log(`[PARAMS %s]: %s`, req.url, params_str)
+                console.log(`[RETURN %s]: %s`, req.url, ret)
             } else {
-                this.log(`[COMPLET %s] %s`, req.url, res.statusCode)
-                this.log(`[PARAMS %s]: %s`, req.url, params_str)
-                this.log(`[RETURN %s]: %s`, req.url, ret)
+                console.log(`[COMPLET %s] %s`, req.url, res.statusCode)
+                console.log(`[PARAMS %s]: %s`, req.url, params_str)
+                console.log(`[RETURN %s]: %s`, req.url, ret)
             }
         }
 
@@ -385,41 +399,5 @@ export class Web {
             .map(arg => arg.replace(/(\/\*.*\*\/)|\?/, "").trim())
             .filter(arg => arg)
         return func['__args']
-    }
-
-    public info(fmt: string, ...args: any[]) {
-        console.info(this.format('INFO', fmt), ...args)
-    }
-    public error(fmt: string, ...args: any[]) {
-        console.error(this.format('ERROR', fmt), ...args)
-    }
-    public warn(fmt: string, ...args: any[]) {
-        console.warn(this.format('WARN', fmt), ...args)
-    }
-    public log(fmt: string, ...args: any[]) {
-        console.log(this.format('LOG', fmt), ...args)
-    }
-
-    private format(sev: string, fmt: string) {
-        let _fmt = fmt
-        if (this.options.logging.color) {
-            _fmt = _fmt.replace(/%[^%]/g, sub => `\x1b[1;36m${sub}\x1b[0m`)
-        }
-
-        if (this.options.logging?.color) {
-            switch (sev) {
-                case 'log': case 'LOG': _fmt = `\x1b[1m${sev}\x1b[0m: ` + _fmt; break
-                case 'info': case 'INFO': _fmt = `\x1b[1;34m${sev}\x1b[0m: ` + _fmt; break
-                case 'warn': case 'WARN': _fmt = `\x1b[1;35m${sev}\x1b[0m: ` + _fmt; break
-                case 'error': case 'ERROR': _fmt = `\x1b[1;31m${sev}\x1b[0m: ` + _fmt; break
-            }
-        } else {
-            _fmt = sev + ': ' + _fmt
-        }
-
-        if (this.options.logging?.timestamp) {
-            _fmt = `[${(new Date()).toLocaleString()}] ` + _fmt
-        }
-        return _fmt
     }
 }

@@ -3,9 +3,10 @@
         "module": "commonjs",
         "target": "es6",
         "sourceMap": false,
-        "removeComments": true,
+        "removeComments": false,
         "noImplicitAny": false,
         "outDir": "./",
+        "declaration": true
     },
     "include": [
         "./src/*"
