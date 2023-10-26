@@ -69,6 +69,7 @@ export class RequestContext {
 
 export type WebSocketHandler = (this: WebSocket, request: http.IncomingMessage) => void
 export type RequestHandler = (this: RequestContext, ...args: any[]) => void
+export type RequestErrorHandler = (this: RequestContext, error: Error) => void
 
 /**
  * @interface Application : 应用接口
@@ -151,7 +152,16 @@ export interface ServerOptions {
      * 若设置了此选项，则当接口函数中抛出异常时，将会调用此函数
      * @default undefined
      */
-    catch?: RequestHandler
+    catch?: RequestErrorHandler
+
+    /**
+     * @property error : 错误处理器
+     * @description
+     * 此选项用于捕获接口返回值为 Error 实例的情况
+     * 若设置了此选项，则当接口函数返回值为 Error 实例时，将会调用此函数
+     * @default undefined
+     */
+    error?: RequestErrorHandler
 }
 
 /**
@@ -343,7 +353,15 @@ export class Web {
                 }
             }
 
-            if (ret != undefined) {
+            if (ret instanceof Error && this.options.error) {
+                try {
+                    ret = await this.options.error.call(handler, ret)
+                } catch (e) {
+                    console.error('%s', e)
+                }
+            } 
+            
+            if (ret !== undefined) {
                 res.setHeader('ContentType', 'application/json')
                 let rets = JSON.stringify(ret)
                 res.write(rets)
