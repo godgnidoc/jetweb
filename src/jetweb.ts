@@ -345,11 +345,15 @@ export class Web {
                 ret = await entry.apply(handler, args)
             } catch (e: any) {
                 console.error('%s', e)
-                if (res.statusCode < 400) res.statusCode = 500
-                try {
-                    if (this.options.catch) ret = await this.options.catch.call(handler, e)
-                } catch (e) {
-                    console.error('%s', e)
+                if (this.options.catch) {
+                    try {
+                        ret = await this.options.catch.call(handler, e)
+                    } catch (e) {
+                        console.error('%s', e)
+                        if (res.statusCode < 400) res.statusCode = 500
+                    }
+                } else {
+                    if (res.statusCode < 400) res.statusCode = 500
                 }
             }
 
@@ -359,8 +363,8 @@ export class Web {
                 } catch (e) {
                     console.error('%s', e)
                 }
-            } 
-            
+            }
+
             if (ret !== undefined) {
                 res.setHeader('ContentType', 'application/json')
                 let rets = JSON.stringify(ret)
